@@ -1,45 +1,27 @@
-## Приложение
+## Запуск проекта (Docker Compose)
 
-Учебный HTTP-сервис со счётчиком. 
+Для запуска:
+`docker compose up -d`
 
-| Запрос | Результат |
-| --- | --- |
-| `GET /` | JSON с `greeting`, `count`, `hostname`, `storage`; счётчик не меняется |
-| `POST /increment` | Увеличить счётчик на 1, вернуть тот же JSON; тело не требуется |
-| `GET /healthz` | HTTP 200, если HTTP-сервер работает |
-| `GET /readyz` | HTTP 200 при доступном хранилище, иначе 503 |
+## Отчёт о проверках (на 8 баллов)
 
-При недоступности Redis `GET /` и `POST /increment` тоже возвращают 503.
-Приложение не сбрасывает данные и не переключается на SQLite при сбое Redis.
-После восстановления Redis следующий запрос снова может выполниться.
-Для проверки JSON открывайте адрес в браузере или используйте `curl`.
+**1. Проверка сохранения счетчика (Volume):**
+Выполнено несколько запросов на увеличение счетчика:
+`curl -fsS -X POST http://127.0.0.1:8080/increment`
+Ответ: `{"greeting": "Hello, Docker!", "count": 4, "hostname": "af172d955af5", "storage": "redis"}`
 
-## Настройки
+Проект остановлен без удаления volume (`docker compose down`), затем запущен заново (`docker compose up -d`).
+Запрос `curl -fsS http://127.0.0.1:8080/`  вернул сохраненное:
+`{"greeting": "Hello, Docker!", "count": 4, "hostname": "8386c1a0d254", "storage": "redis"}`
 
-| Переменная | По умолчанию | Значение |
-| --- | --- | --- |
-| `PORT` | `8000` | Порт внутри контейнера; приложение слушает `0.0.0.0` |
-| `GREETING` | `Hello, Docker!` | Текст поля `greeting` |
-| `STORAGE` | `sqlite` | `sqlite` для 4–6 баллов; `redis` для 8–10 |
-| `DATA_FILE` | `/data/counter.db` | Путь SQLite, используется только в режиме sqlite |
-| `REDIS_URL` | `redis://redis:6379/0` | Адрес Redis, используется только в режиме redis |
+**2. Проверка отключения Redis:**
+Остановлена редиска: `docker compose stop redis`
+Запрос readyz (`curl -I -X POST http://127.0.0.1:8080/increment`) возвращает HTTP 503:
+`HTTP/1.0 503 Service Unavailable`
 
-SQLite — база в одном файле; при удалении контейнера без volume файл пропадёт.
-В режиме Redis приложение не пишет локальные данные; Redis хранит ключ
-`docker-hw:counter`. Перенос счётчика из SQLite в Redis не нужен.
-
-Для образа подойдёт официальный `python:3.13-slim`, для хранилища —
-`redis:7.4-alpine`. Теги задают семейство версии, но могут обновляться;
-для неизменного содержимого существует привязка по digest. Digest в ДЗ
-не обязателен. Пакет redis — клиент, сам сервер Redis он не устанавливает.
-
-## Проверка после запуска контейнера
-
-```sh
-curl -fsS http://127.0.0.1:8080/
-curl -fsS -X POST http://127.0.0.1:8080/increment
-curl -fsS http://127.0.0.1:8080/readyz
-```
-
-Первый POST в новом хранилище возвращает `count: 1`. GET счётчик не
-увеличивает. В браузере удобнее смотреть GET, для POST используйте curl.
+**3. Проверка восстановления Redis:**
+Запущена редиска: `docker compose start redis`
+После восстановления редиски запрос `curl -fsS http://127.0.0.1:8080/` успешно вернул старое:
+`{"greeting": "Hello, Docker!", "count": 4, "hostname": "8386c1a0d254", "storage": "redis"}`
+Следующий запрос `POST /increment` увеличил счетчик:
+`{"greeting": "Hello, Docker!", "count": 5, "hostname": "8386c1a0d254", "storage": "redis"}`
